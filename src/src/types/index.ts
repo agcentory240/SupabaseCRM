@@ -29,6 +29,7 @@ export interface Task {
   status: TaskStatus
   author_id: string | null
   created_at: string
+  assignee?: { id: string; email: string } | null
 }
 
 export interface TaskHistoryItem {
