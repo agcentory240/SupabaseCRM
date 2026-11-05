@@ -27,3 +27,4 @@ AGENT_INSTRUCTIONS.md
 *.njsproj
 *.sln
 *.sw?
+.vercel
