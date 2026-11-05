@@ -64,3 +64,17 @@ export async function changeTaskStatus(
 
   if (error) throw error
 }
+
+export async function fetchMyTasks(): Promise<Task[]> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*, assignee:profiles!tasks_assignee_id_fkey(id, email)')
+    .eq('assignee_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data as Task[]
+}

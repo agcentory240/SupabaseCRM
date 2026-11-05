@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore'
 export function Layout({ children }: { children: ReactNode }) {
   const signOut = useAuthStore((s) => s.signOut)
   const navigate = useNavigate()
+  const profile = useAuthStore((s) => s.profile)
 
   const handleLogout = async () => {
     await signOut()
@@ -16,7 +17,9 @@ export function Layout({ children }: { children: ReactNode }) {
       <header className="bg-white border-b px-6 py-3 flex gap-4 items-center">
         <Link to="/" className="font-semibold">SupabaseCRM</Link>
         <Link to="/" className="text-sm text-gray-600 hover:text-black">Объекты</Link>
-        <Link to="/my-tasks" className="text-sm text-gray-600 hover:text-black">Мои задачи</Link>
+        {profile?.role === 'worker' && (
+          <Link to="/my-tasks" className="text-sm text-gray-600 hover:text-black">Мои задачи</Link>
+        )}
         <button
           onClick={handleLogout}
           className="ml-auto text-sm text-gray-600 hover:text-black cursor-pointer"
