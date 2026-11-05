@@ -1,32 +1,176 @@
-# React + TypeScript + Vite
+# SupabaseCRM
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Мини-CRM для строительной компании: объекты (стройки) и задачи с циклом статусов и историей изменений. Тестовое задание.
 
-Currently, two official plugins are available:
+## Стек
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React 19** + **TypeScript** + **Vite**
+- **Supabase** (PostgreSQL + Auth + RLS)
+- **Tailwind CSS**
+- **React Router**
+- **Zustand**
 
-## React Compiler
+## Функционал
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Вход по email и паролю (Supabase Auth).
+- Две роли: **постановщик** (manager) и **исполнитель** (worker).
+- Объекты (стройки): создание, редактирование, удаление — только менеджер.
+- Задачи: создание с назначением исполнителя, цикл статусов, история изменений.
+- «Мои задачи» для исполнителя.
+- Интерфейс показывает только доступные действия (по роли и статусу).
+- Безопасность на уровне БД (RLS + SQL-функция смены статуса).
 
-## Expanding the Oxlint configuration
+## Требования
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+- Node.js 20+
+- Аккаунт Supabase (бесплатный тариф)
+- Docker (опционально, для Supabase CLI и миграций)
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## Запуск
+
+### 1. Установка зависимостей
+
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 2. Настройка Supabase
+
+1. Создай проект на [database.new](https://database.new).
+2. В **Authentication → Sign In / Providers → Email**:
+   - **Включи** провайдер Email (иначе вход не работает).
+   - **Отключи** «Allow new users to sign up» (открытая регистрация запрещена по ТЗ).
+   - **Отключи** «Confirm Email» (для тестовых пользователей).
+3. Создай тестовых пользователей в **Authentication → Users** (вручную, с **Auto Confirm**):
+   - `manager@test.com` — в **User Metadata** укажи `{"role": "manager"}`.
+   - `worker1@test.com` — без метаданных (роль `worker` по умолчанию).
+   - `worker2@test.com` — без метаданных.
+4. Выполни SQL-скрипты из `supabase/migrations/` в **SQL Editor** (или через `npx supabase db push`, если связал проект с CLI). Скрипты создают:
+   - таблицы `profiles`, `objects`, `tasks`, `task_history`;
+   - RLS-политики;
+   - функцию `change_task_status`;
+   - триггер на создание профиля при регистрации.
+
+### 3. Переменные окружения
+
+Создай `.env.local` в корне:
+
+```env
+VITE_SUPABASE_URL=https://твой-проект.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+### 4. Запуск
+
+```bash
+npm run dev
+```
+
+Приложение откроется на `http://localhost:5173`.
+
+### 5. Сборка
+
+```bash
+npm run build
+```
+
+## Структура проекта
+
+```
+src/
+├── api/              # обёртки над supabase.from(), RPC
+│   ├── objects.ts
+│   ├── tasks.ts
+│   └── profiles.ts
+├── components/
+│   ├── Layout.tsx
+│   ├── ObjectCard.tsx
+│   ├── StatusBadge.tsx
+│   └── TaskCard.tsx
+├── constants/
+│   ├── statuses.ts
+│   └── transitions.ts
+├── lib/
+│   └── supabaseClient.ts
+├── pages/
+│   ├── LoginPage.tsx
+│   ├── ObjectsPage.tsx
+│   ├── ObjectDetailPage.tsx
+│   ├── TaskDetailPage.tsx
+│   └── MyTasksPage.tsx
+├── store/
+│   └── authStore.ts
+├── types/
+│   └── index.ts
+├── App.tsx
+└── main.tsx
+```
+
+## Роли и доступ
+
+**Постановщик (manager):**
+- Создаёт, редактирует, удаляет объекты и задачи.
+- Назначает исполнителя.
+- Принимает задачи или возвращает на доработку (с комментарием).
+- Видит всё.
+
+**Исполнитель (worker):**
+- Видит только свои задачи и объекты, где у него есть задачи.
+- Берёт задачу в работу и отправляет на проверку.
+- Не может создавать, редактировать, удалять объекты и задачи.
+
+## Цикл статусов
+
+| Из | В | Кто |
+|---|---|---|
+| — | Новая | постановщик (при создании) |
+| Новая | В работе | назначенный исполнитель |
+| В работе | На проверке | назначенный исполнитель |
+| На проверке | Принята | постановщик |
+| На проверке | На доработке | постановщик (комментарий обязателен) |
+| На доработке | В работе | назначенный исполнитель |
+
+Другие переходы запрещены.
+
+## Безопасность
+
+- **RLS включён** на всех таблицах. Политики закрывают доступ на уровне БД, а не только в интерфейсе.
+- **Переходы статусов** проверяются в SQL-функции `change_task_status` (security definer). Запрещённый переход не пройдёт, даже если отправить запрос вручную.
+- **История статусов** — только INSERT. Нет прав на UPDATE/DELETE, политик на изменение нет.
+- **Открытая регистрация** отключена. Тестовые пользователи создаются вручную.
+- **Секретные ключи** (`service_role`, `secret`) не попадают во фронтенд и репозиторий.
+
+## Миграции
+
+Схема БД создаётся SQL-скриптами в `supabase/migrations/`. Если используешь Supabase CLI:
+
+```bash
+npx supabase link --project-ref <project-ref>
+npx supabase db pull --remote
+npx supabase db push
+```
+
+## Решения и допущения
+
+- **Имя пользователя** не хранится в `profiles` (только email и роль). 
+- **История статусов** пишется только через SQL-функцию `change_task_status`. Прямой INSERT через API запрещён (нет политики).
+- **Статусы** в БД на английском (`new`, `in_progress`, ...), в UI — на русском.
+- **Дизайн** минимальный (Tailwind, без кастомных анимаций).
+- **Открытая регистрация** отключена. Тестовых пользователей создаём вручную в Supabase Dashboard.
+- **Удаление объекта** никакое не удаление потому что так нельзя.
+
+## Ограничения / что не успел
+
+- [ ] Автотесты
+- [ ] Полноценный UI-кит (используются базовые компоненты Tailwind)
+- [ ] Индексы
+- [ ] Пагинация списков
+
+## Скрипты
+
+```bash
+npm run dev       # dev-сервер
+npm run build     # сборка (проверка типов)
+npm run preview   # предпросмотр сборки
+npm run lint      # линтер
+```
